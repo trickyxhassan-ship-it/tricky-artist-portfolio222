@@ -1,0 +1,988 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tricky Artist Portfolio</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Outfit:wght@300;400;600;800&display=swap');
+
+        :root {
+            --purple: #8b5cf6;
+            --orange: #f97316;
+            --black:  #060608;
+        }
+
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--black);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .sf { font-family: 'Syncopate', sans-serif; }
+
+        /* ─── BG CANVAS (fixed overlay) ─── */
+        #bg-canvas {
+            position: fixed; inset: 0;
+            width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+            mix-blend-mode: screen;
+            opacity: 0.5;
+        }
+        #scanline {
+            position: fixed; inset: 0; z-index: 1; pointer-events: none;
+            background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px);
+        }
+
+        /* ─── SOLID SECTION BGs ─── */
+        nav      { position:relative; z-index:200; background:rgba(6,6,8,0.9); }
+        #about   { position:relative; z-index:2;   background:#08080d; }
+        #work    { position:relative; z-index:2;   background:#050509; }
+        #contact { position:relative; z-index:2;   background:#07070b; }
+        footer   { position:relative; z-index:2;   background:#07070b; }
+
+        /* ─── CUSTOM CURSOR ─── */
+        #cursor,#cursor-aura{ position:fixed;pointer-events:none;z-index:99999;display:none; }
+        @media (pointer:fine){
+            *{ cursor:none!important; }
+            #cursor{ display:block;width:8px;height:8px;background:#fff;border-radius:50%;mix-blend-mode:difference; }
+            #cursor-aura{ display:block;width:36px;height:36px;border:1.5px solid var(--orange);border-radius:50%; }
+        }
+
+        /* ─── NAV ─── */
+        nav {
+            position:fixed; top:0; left:0; right:0;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:16px clamp(16px,4vw,40px);
+            backdrop-filter:blur(18px);
+            border-bottom:1px solid rgba(255,255,255,0.04);
+        }
+
+         /* ── Photo Mask ── */
+        .photo-mask-complex {
+            clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .nav-logo{ font-family:'Syncopate',sans-serif; font-size:clamp(13px,2.5vw,19px); letter-spacing:-1px; text-transform:uppercase; white-space:nowrap; }
+        .nav-logo span { color: var(--orange); }
+
+        .nav-links{ display:flex; gap:clamp(16px,3vw,36px); list-style:none; }
+        .nav-links a{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:3px; text-decoration:none; color:rgba(255,255,255,0.5); transition:color .3s; }
+        .nav-links a:hover{ color:var(--purple); }
+
+        /* Spotify */
+        #sp-widget{ display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); padding:7px 14px; border-radius:999px; }
+        #sp-widget.hidden{ display:none!important; }
+
+        /* ─── HAMBURGER ─── */
+        .hbg{
+            display:none; flex-direction:column; justify-content:center; align-items:center;
+            width:44px; height:44px; border-radius:12px;
+            background:rgba(139,92,246,0.07); border:1px solid rgba(139,92,246,0.18);
+            cursor:pointer; gap:5px; transition:background .3s,border-color .3s; flex-shrink:0; z-index:9999;
+        }
+        .hbg:hover{ background:rgba(139,92,246,0.14); border-color:rgba(139,92,246,0.5); }
+        .hl{
+            display:block; width:22px; height:2px; background:#fff; border-radius:2px;
+            transform-origin:center;
+            transition:transform .4s cubic-bezier(.23,1,.32,1), opacity .3s, width .3s;
+        }
+        .hl:nth-child(2){ width:16px; }
+        .hbg.open .hl:nth-child(1){ transform:translateY(7px) rotate(45deg); }
+        .hbg.open .hl:nth-child(2){ opacity:0; width:22px; transform:scaleX(0); }
+        .hbg.open .hl:nth-child(3){ transform:translateY(-7px) rotate(-45deg); }
+
+        /* Mobile drawer */
+        .mob-drawer{
+            display:none; position:fixed; top:0; right:0;
+            width:min(310px,84vw); height:100vh;
+            background:#0b0b13; border-left:1px solid rgba(139,92,246,0.14);
+            z-index:9990; flex-direction:column; justify-content:center;
+            padding:48px 36px; transform:translateX(100%);
+            transition:transform .45s cubic-bezier(.23,1,.32,1);
+        }
+        .mob-drawer::before{
+            content:''; position:absolute; top:0; left:0; bottom:0; width:3px;
+            background:linear-gradient(to bottom,var(--purple),var(--orange)); border-radius:0 2px 2px 0;
+        }
+        .mob-drawer.open{ transform:translateX(0); }
+        .mob-drawer a{
+            font-family:'Syncopate',sans-serif; font-size:clamp(20px,5vw,28px); font-weight:700;
+            text-transform:uppercase; text-decoration:none; color:rgba(255,255,255,0.28);
+            letter-spacing:-1px; padding:11px 0; display:block; width:100%;
+            transition:color .3s, padding-left .3s; border-bottom:1px solid rgba(255,255,255,0.04);
+        }
+        .mob-drawer a:hover{ color:#fff; padding-left:10px; }
+        .mob-socials{ display:flex; gap:12px; margin-top:28px; }
+        .mob-socials a{
+            width:38px; height:38px; border-radius:50%; border:1px solid rgba(255,255,255,0.1);
+            display:flex; align-items:center; justify-content:center;
+            text-decoration:none; color:rgba(255,255,255,0.4); font-size:14px;
+            transition:all .3s;
+        }
+        .mob-socials a:hover{ background:#fff; color:#000; }
+
+        .mob-overlay{
+            display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72);
+            backdrop-filter:blur(4px); z-index:9980; opacity:0; transition:opacity .4s;
+        }
+        .mob-overlay.open{ opacity:1; }
+
+        @media(max-width:900px){
+            .nav-links{ display:none; }
+            #sp-widget { display:none!important; }
+            .hbg{ display:flex; }
+            .mob-drawer{ display:flex; }
+            .mob-overlay{ display:block; }
+        }
+
+        /* ─── ABOUT ─── */
+        #about{
+            min-height:100svh;
+            padding:clamp(100px,13vw,150px) clamp(16px,5vw,60px) clamp(60px,7vw,100px);
+            display:flex; align-items:center; justify-content:center;
+        }
+        .about-inner{
+            display:flex; flex-direction:row; align-items:center;
+            gap:clamp(28px,6vw,80px); width:100%; max-width:1200px;
+        }
+        @media(max-width:768px){ .about-inner{ flex-direction:column; } }
+
+        /* ─── WORK ─── */
+        #work{ padding:clamp(60px,8vw,120px) clamp(16px,5vw,60px); }
+        .proj-grid{
+            display:grid;
+            grid-template-columns:repeat(auto-fill,minmax(min(270px,100%),1fr));
+            gap:clamp(12px,2vw,22px);
+        }
+
+        /* ─── PROJECT CARD ─── */
+        .pc{
+            position:relative; border-radius:20px; overflow:hidden; cursor:pointer;
+            background:#0d0d14; border:1px solid rgba(139,92,246,0.11);
+            transition:transform .45s cubic-bezier(.23,1,.32,1), border-color .4s, box-shadow .4s;
+            aspect-ratio:3/4;
+        }
+        .pc:hover{
+            transform:translateY(-8px) scale(1.015);
+            border-color:rgba(139,92,246,0.55);
+            box-shadow:0 22px 60px rgba(139,92,246,0.2), inset 0 0 30px rgba(139,92,246,0.03);
+        }
+        .pc-img{
+            width:100%; height:100%; object-fit:cover;
+            transition:transform .7s cubic-bezier(.23,1,.32,1), filter .5s;
+            filter:brightness(.72) saturate(.85);
+        }
+        .pc:hover .pc-img{ transform:scale(1.1); filter:brightness(.42) saturate(.65); }
+
+        /* corner bracket */
+        .pc::after{
+            content:''; position:absolute; top:0; left:0; z-index:4;
+            width:50px; height:50px;
+            border-top:2px solid var(--orange); border-left:2px solid var(--orange);
+            border-radius:20px 0 0 0; opacity:0; transition:opacity .4s;
+        }
+        .pc:hover::after{ opacity:1; }
+
+        .ptag{
+            display:inline-flex; align-items:center; gap:4px;
+            padding:3px 10px; border-radius:999px;
+            font-size:9px; font-weight:900; letter-spacing:2px; text-transform:uppercase;
+            background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.32); color:#f97316;
+        }
+        .pinfo{
+            position:absolute; bottom:0; left:0; right:0; z-index:2;
+            padding:30px 18px 18px;
+            background:linear-gradient(to top,rgba(0,0,0,0.96),rgba(0,0,0,0.5) 60%,transparent);
+            transform:translateY(6px); transition:transform .4s cubic-bezier(.23,1,.32,1);
+        }
+        .pc:hover .pinfo{ transform:translateY(0); }
+        .ptitle{ font-family:'Syncopate',sans-serif; font-size:clamp(10px,2vw,13px); line-height:1.3; }
+        .pvbtn{
+            display:inline-flex; align-items:center; gap:6px; margin-top:10px;
+            padding:7px 14px; border-radius:999px;
+            border:1px solid rgba(255,255,255,0.17);
+            font-size:9px; font-weight:800; letter-spacing:2px; text-transform:uppercase;
+            color:#fff; background:rgba(255,255,255,0.07); backdrop-filter:blur(100px);
+            opacity:0; transform:translateY(10px);
+            transition:all .35s ease .08s;
+        }
+        .pc:hover .pvbtn{ opacity:1; transform:translateY(0); }
+        .pvbtn:hover{ background:var(--orange); border-color:var(--orange); }
+        .pcbadge{
+            position:absolute; top:12px; right:12px; z-index:3;
+            display:flex; align-items:center; gap:5px;
+            padding:4px 10px; border-radius:999px;
+            background:rgba(0,0,0,0.55); backdrop-filter:blur(12px);
+            border:1px solid rgba(255,255,255,0.08);
+            font-size:10px; font-weight:700; color:rgba(255,255,255,0.6);
+        }
+
+        /* ─── MODAL ─── */
+        #pm{
+            position:fixed; inset:0; z-index:9500;
+            display:flex; align-items:center; justify-content:center;
+            padding:clamp(10px,3vw,20px);
+            opacity:0; pointer-events:none; transition:opacity .4s;
+        }
+        #pm.open{ opacity:1; pointer-events:all; }
+        .pm-bd{ position:absolute; inset:0; background:rgba(4,4,8,0.94); backdrop-filter:blur(22px); }
+        .pm-box{
+            position:relative; z-index:1; width:100%; max-width:1100px; max-height:92svh;
+            overflow-y:auto; background:#0b0b13;
+            border:1px solid rgba(139,92,246,0.17); border-radius:24px;
+            box-shadow:0 40px 120px rgba(0,0,0,0.85);
+            transform:translateY(28px) scale(.97); transition:transform .4s cubic-bezier(.23,1,.32,1);
+            scrollbar-width:thin; scrollbar-color:rgba(139,92,246,0.3) transparent;
+        }
+        #pm.open .pm-box{ transform:translateY(0) scale(1); }
+        .pm-box::-webkit-scrollbar{ width:4px; }
+        .pm-box::-webkit-scrollbar-thumb{ background:rgba(139,92,246,0.3); border-radius:2px; }
+        .pm-close{
+            position:absolute; top:14px; right:14px;
+            width:36px; height:36px; border-radius:50%;
+            background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+            display:flex; align-items:center; justify-content:center;
+            font-size:13px; color:rgba(255,255,255,0.45); cursor:pointer;
+            transition:all .3s; z-index:10;
+        }
+        .pm-close:hover{ background:rgba(249,115,22,0.18); border-color:var(--orange); color:var(--orange); transform:rotate(90deg); }
+        .pm-hero{ width:100%; max-height:58svh; object-fit:contain; border-radius:12px; background:#111; cursor:zoom-in; }
+        .pm-thumbs{ display:flex; gap:8px; overflow-x:auto; scrollbar-width:thin; scrollbar-color:rgba(139,92,246,0.25) transparent; }
+        .pm-thumbs::-webkit-scrollbar{ height:3px; }
+        .pm-thumbs::-webkit-scrollbar-thumb{ background:rgba(139,92,246,0.3); border-radius:2px; }
+        .pm-thumb{ flex-shrink:0; width:68px; height:68px; object-fit:cover; border-radius:9px; border:2px solid transparent; cursor:pointer; opacity:.42; transition:border-color .25s, opacity .25s; }
+        .pm-thumb.active{ border-color:var(--orange); opacity:1; }
+        .pm-thumb:hover{ opacity:.78; }
+
+        /* ─── CONTACT ─── */
+        #contact{ padding:clamp(60px,8vw,120px) clamp(16px,5vw,60px); }
+        .ct-grid{ display:grid; grid-template-columns:1fr 2fr; gap:clamp(24px,4vw,60px); align-items:start; }
+        @media(max-width:680px){ .ct-grid{ grid-template-columns:1fr; } }
+
+        .ct-input{
+            width:100%; background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,0.1);
+            padding:12px 0; color:#fff; font-family:'Outfit',sans-serif; font-size:14px; outline:none;
+            transition:border-color .3s;
+        }
+        .ct-input:focus{ border-color:var(--orange); }
+
+        /* ─── SCROLLBAR ─── */
+        ::-webkit-scrollbar{ width:5px; }
+        ::-webkit-scrollbar-track{ background:#060608; }
+        ::-webkit-scrollbar-thumb{ background:rgba(139,92,246,0.3); border-radius:3px; }
+
+        @keyframes spulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
+        /* form name/email grid responsive */
+        .form-row{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        @media(max-width:500px){ .form-row{ grid-template-columns:1fr; } }
+
+        /* 📥 Download Button Style */
+        .dl-btn {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 20px; border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #fff; font-size: 10px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 2px;
+            text-decoration: none; transition: all 0.3s;
+            cursor: pointer;
+        }
+        .dl-btn:hover { background: var(--orange); border-color: var(--orange); transform: translateY(-2px); box-shadow: 0 10px 20px rgba(249, 115, 22, 0.2); }
+        .dl-btn i { font-size: 11px; }
+
+        @media(max-width: 1024px) {
+            .dl-btn-txt { display: none; }
+            .dl-btn { padding: 9px 12px; }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- BG Canvas -->
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div id="scanline" aria-hidden="true"></div>
+
+<!-- Cursors -->
+<div id="cursor"></div>
+<div id="cursor-aura"></div>
+
+<!-- Mobile overlay -->
+<div class="mob-overlay" id="mob-overlay" onclick="closeMenu()"></div>
+
+<!-- Mobile drawer -->
+<div class="mob-drawer" id="mob-drawer">
+    <a href="#about"   onclick="closeMenu()">About</a>
+    <a href="#work"    onclick="closeMenu()">Work</a>
+    <a href="#contact" onclick="closeMenu()">Contact</a>
+    <a href="javascript:void(0)" onclick="downloadResume(); closeMenu()" style="color: var(--orange)">Download CV</a>
+    <div class="mob-socials">
+        <a href="https://www.instagram.com/mahdihassan4499/" target="_blank" rel="noopener" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+        <a href="https://www.behance.net/mahadihassan2004"   target="_blank" rel="noopener" aria-label="Behance"><i class="fab fa-behance"></i></a>
+        <a href="https://www.linkedin.com/in/tricky-hassan-2664083a6/" target="_blank" rel="noopener" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+    </div>
+</div>
+
+<!-- NAV -->
+<nav>
+    <div class="nav-logo">tricky<span>.</span>artist</div>
+    <ul class="nav-links">
+        <li><a href="#about">About</a></li>
+        <li><a href="#work">Work</a></li>
+        <li><a href="#contact">Contact</a></li>
+    </ul>
+
+    <div class="flex items-center gap-4">
+        <!-- Download Option -->
+        <button onclick="downloadResume()" class="dl-btn" aria-label="Download CV">
+            <i class="fas fa-file-download"></i>
+            <span class="dl-btn-txt">Download CV</span>
+        </button>
+
+        <div id="sp-widget" class="hidden">
+            <div style="position:relative;">
+                <div style="width:7px;height:7px;background:#22c55e;border-radius:50%;animation:spulse 2s infinite;position:absolute;top:-3px;right:-3px;"></div>
+                <i class="fab fa-spotify" style="color:#22c55e;font-size:15px;"></i>
+            </div>
+            <div style="font-size:10px;line-height:1.3;">
+                <p style="color:rgba(255,255,255,0.32);font-weight:900;letter-spacing:2px;text-transform:uppercase;font-size:8px;">Listening to</p>
+                <p id="track-name" style="font-weight:700;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</p>
+            </div>
+        </div>
+        <button class="hbg" id="hbg" aria-label="Toggle menu" onclick="toggleMenu()">
+            <span class="hl"></span><span class="hl"></span><span class="hl"></span>
+        </button>
+    </div>
+</nav>
+
+<!-- ═ ABOUT ═ -->
+<section id="about">
+    <div class="about-inner">
+        <div class="w-full md:w-1/2 flex justify-center relative group">
+            <div class="crazy-image-container relative w-full max-w-sm aspect-[4/5] perspective-1000">
+                <div class="crazy-layer layer-base absolute inset-0 bg-purple-900/10 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000 scale-110"></div>
+                <div class="crazy-layer layer-secondary absolute inset-0 photo-mask-complex overflow-hidden border-2 border-orange-500/20 translate-x-2 translate-y-2 opacity-30 group-hover:translate-x-6 group-hover:translate-y-6 group-hover:opacity-100 transition-all duration-700 ease-out">
+                    <img src="profile photo/tricku.png" alt="Tricky parallax" class="w-full h-full object-cover grayscale brightness-50 group-hover:grayscale-0 group-hover:brightness-100 transition-all duration-700">
+                </div>
+                <div class="crazy-layer layer-lines absolute inset-0 photo-mask-complex overflow-hidden border-4 border-purple-500/30 -translate-x-2 -translate-y-2 group-hover:-translate-x-8 group-hover:-translate-y-8 transition-all duration-500 ease-out">
+                    <img src="profile photo/tricku.png" alt="Tricky line" class="w-full h-full object-cover grayscale opacity-0 group-hover:opacity-10 transition-opacity duration-300">
+                </div>
+                <div class="crazy-layer layer-main absolute inset-0 photo-mask-complex overflow-hidden border-2 border-purple-900 shadow-2xl transition-all duration-300 group-hover:scale-105 group-hover:border-purple-500 group-hover:shadow-[0_0_50px_rgba(139,92,246,0.5)]">
+                    <img src="profile photo/tricku.png" alt="Tricky artist" class="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-1000 ease-in-out">
+                </div>
+            </div>
+        </div>
+
+        <div style="flex:1;min-width:0;">
+            <p style="color:var(--orange);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:4px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+                <span style="width:26px;height:1px;background:var(--orange);display:inline-block;flex-shrink:0;"></span>About
+            </p>
+            <h1 class="sf" style="font-size:clamp(36px,8vw,88px);line-height:.95;margin-bottom:22px;">
+                tricky<br><span style="color:var(--purple);">artist</span>
+            </h1>
+            <p id="bio-text" style="font-size:clamp(14px,2vw,18px);color:rgba(255,255,255,0.42);max-width:460px;margin-bottom:30px;line-height:1.7;font-weight:300;">
+                Crafting digital chaos into <span style="color:#fff;font-weight:600;">visual gold</span>.
+                Esports production, custom jersey design & cinematic posters that demand attention.
+            </p>
+            <div style="display:flex;gap:clamp(20px,4vw,40px);margin-bottom:32px;flex-wrap:wrap;">
+                <div><p class="sf stat-number" data-target="6" id="portfolio-count" style="font-size:clamp(22px,4vw,34px);color:var(--purple);">0</p><p style="font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Projects</p></div>
+                <div><p class="sf stat-number" id="years-count" data-target="3" style="font-size:clamp(22px,4vw,34px);color:var(--orange);">0</p><p style="font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Years</p></div>
+                <div><p class="sf" id="location-display" style="font-size:clamp(22px,4vw,34px);color:#fff;">BD</p><p style="font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;font-weight:700;">Based in</p></div>
+            </div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap">
+                <a href="#work" class="explore-btn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.42);color:rgba(139,92,246,.9);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:3px;text-decoration:none;border-radius:999px;transition:all .35s;">
+                    Explore Portfolio <i class="fas fa-arrow-right" style="font-size:9px;"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═ WORK ═ -->
+<section id="work">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:clamp(28px,5vw,56px);flex-wrap:wrap;gap:14px;">
+        <div>
+            <p style="color:var(--orange);font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:4px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+                <span style="width:18px;height:1px;background:var(--orange);display:inline-block;"></span>Portfolio
+            </p>
+            <h2 class="sf" style="font-size:clamp(18px,4vw,38px);">FEATURED <span style="color:var(--purple);">PROJECTS</span></h2>
+        </div>
+        <p id="work-helper" style="color:rgba(255,255,255,0.18);font-size:11px;letter-spacing:1px;">Click a project to explore</p>
+    </div>
+
+    <div class="proj-grid" id="project-grid"></div>
+</section>
+
+<!-- PROJECT MODAL -->
+<div id="pm" role="dialog" aria-modal="true">
+    <div class="pm-bd" onclick="closeProject()"></div>
+    <div class="pm-box">
+        <button class="pm-close" onclick="closeProject()" aria-label="Close"><i class="fas fa-times"></i></button>
+        <div style="padding:clamp(18px,4vw,38px);">
+            <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:24px;">
+                <div>
+                    <div id="pm-tag" class="ptag" style="margin-bottom:9px;"></div>
+                    <h2 id="pm-title" class="sf" style="font-size:clamp(18px,4vw,34px);margin-bottom:7px;"></h2>
+                    <p id="pm-desc" style="color:rgba(255,255,255,0.38);font-size:13px;max-width:480px;line-height:1.6;"></p>
+                </div>
+                <a id="pm-behance" href="#" target="_blank" rel="noopener"
+                   style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:999px;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;text-decoration:none;color:rgba(255,255,255,0.5);transition:all .3s;white-space:nowrap;"
+                   onmouseover="this.style.background='#fff';this.style.color='#000';" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.color='rgba(255,255,255,0.5)';">
+                    <i class="fab fa-behance"></i> Behance
+                </a>
+            </div>
+            <div style="border-radius:14px;overflow:hidden;background:#111;margin-bottom:12px;min-height:180px;display:flex;align-items:center;justify-content:center;">
+                <img id="pm-img" src="" alt="" class="pm-hero" onclick="cycleImage(1)">
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <button onclick="cycleImage(-1)" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.32);font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;background:none;border:none;cursor:pointer;transition:color .2s;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='rgba(255,255,255,0.32)';"><i class="fas fa-chevron-left"></i> Prev</button>
+                <span id="pm-counter" style="color:rgba(255,255,255,0.22);font-size:10px;font-weight:700;letter-spacing:2px;"></span>
+                <button onclick="cycleImage(1)" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.32);font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;background:none;border:none;cursor:pointer;transition:color .2s;" onmouseover="this.style.color='#fff';" onmouseout="this.style.color='rgba(255,255,255,0.32)';">Next <i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div id="pm-thumbs" class="pm-thumbs" style="margin-bottom:24px;"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.05);">
+                <div><p style="font-size:8px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:3px;margin-bottom:4px;">Category</p><p id="pm-cat" style="font-size:13px;font-weight:600;"></p></div>
+                <div><p style="font-size:8px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:3px;margin-bottom:4px;">Tools</p><p id="pm-tools" style="font-size:13px;font-weight:600;"></p></div>
+                <div><p style="font-size:8px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:3px;margin-bottom:4px;">Year</p><p id="pm-year" style="font-size:13px;font-weight:600;"></p></div>
+                <div><p style="font-size:8px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:3px;margin-bottom:4px;">Client</p><p id="pm-client" style="font-size:13px;font-weight:600;"></p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="portfolio-projects-data" type="application/json">
+[
+  {
+    "title": "Stand for Honor",
+    "tag": "Esports Branding",
+    "desc": "Opening ceremony graphics and visual identity for a major esports event. Designed for maximum impact on screen and stage.",
+    "category": "Esports Branding",
+    "tools": "Photoshop",
+    "year": "2024",
+    "client": "Tournament Org",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["OPENING.png"]
+  },
+  {
+    "title": "Artboard Series",
+    "tag": "Jersey Design",
+    "desc": "A complete jersey design series for competitive esports teams, exploring bold typography and team identity systems.",
+    "category": "Jersey Design",
+    "tools": "Illustrator, Photoshop",
+    "year": "2024",
+    "client": "Esports Team",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["Artboard 3.png"]
+  },
+  {
+    "title": "Tricky Signature",
+    "tag": "Signature Series",
+    "desc": "Personal brand jersey reflecting the Tricky Artist visual language with aggressive cuts, bold color blocking, and dynamic sublimation.",
+    "category": "Jersey Design",
+    "tools": "Illustrator, Photoshop",
+    "year": "2025",
+    "client": "Personal Brand",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["jersey-thumbnail.jpg"]
+  },
+  {
+    "title": "Pro Jersey V2",
+    "tag": "Pro Edition",
+    "desc": "Second iteration of the Pro series with refined typography and an aggressive dual-colorway system for competitive wear.",
+    "category": "Jersey Design",
+    "tools": "Illustrator",
+    "year": "2025",
+    "client": "Pro Team",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["jersey-thumbnail.jpg"]
+  },
+  {
+    "title": "Pro Jersey V3",
+    "tag": "Limited Drop",
+    "desc": "Limited edition colorway with holographic detailing and exclusive team-only numbering created for a tight production run.",
+    "category": "Jersey Design",
+    "tools": "Illustrator, Photoshop",
+    "year": "2025",
+    "client": "Limited Edition",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["jersey-thumbnail.jpg"]
+  },
+  {
+    "title": "Pro Jersey V4",
+    "tag": "Championship",
+    "desc": "Championship finals jersey with embossed logos, gradient panels, and a crest system built for the biggest stage.",
+    "category": "Jersey Design",
+    "tools": "Illustrator, Photoshop",
+    "year": "2026",
+    "client": "Championship Org",
+    "behance": "https://www.behance.net/mahadihassan2004",
+    "images": ["jersey-thumbnail.jpg"]
+  }
+]
+</script>
+
+<!-- ═ CONTACT ═ -->
+<section id="contact">
+    <div style="max-width:940px;margin:0 auto;">
+        <div style="text-align:center;margin-bottom:clamp(36px,6vw,68px);">
+            <h2 class="sf" style="font-size:clamp(26px,6vw,60px);letter-spacing:-1px;text-transform:uppercase;margin-bottom:12px;">
+                Let's <span style="color:var(--orange);">Work</span> Together
+            </h2>
+            <p style="color:rgba(255,255,255,0.28);font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:700;">Based in Dhaka &bull; Available Worldwide</p>
+        </div>
+
+        <div class="ct-grid">
+            <div style="display:flex;flex-direction:column;gap:26px;">
+                <div>
+                    <p style="font-size:9px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:4px;margin-bottom:7px;">Direct Mail</p>
+                    <a id="contact-email" href="mailto:trickyartist37@gmail.com" style="font-size:clamp(12px,2vw,16px);font-weight:500;text-decoration:none;color:#fff;transition:color .3s;margin-bottom:8px;display:block;" onmouseover="this.style.color='var(--orange)';" onmouseout="this.style.color='#fff';">trickyartist37@gmail.com</a>
+                    
+                    <p style="font-size:9px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:4px;margin-bottom:7px;margin-top:15px;">Phone</p>
+                    <a id="contact-phone" href="tel:01885903515" style="font-size:clamp(12px,2vw,16px);font-weight:500;text-decoration:none;color:#fff;transition:color .3s;" onmouseover="this.style.color='var(--orange)';" onmouseout="this.style.color='#fff';">01885903515</a>
+                </div>
+                <div>
+                    <p style="font-size:9px;font-weight:900;color:var(--purple);text-transform:uppercase;letter-spacing:4px;margin-bottom:11px;">Social Hub</p>
+                    <div style="display:flex;gap:11px;flex-wrap:wrap;">
+                        <a id="social-instagram" href="https://www.instagram.com/mahdihassan4499/" target="_blank" rel="noopener" aria-label="Instagram" style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;text-decoration:none;color:rgba(255,255,255,0.45);transition:all .3s;" onmouseover="this.style.background='#fff';this.style.color='#000';" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.45)';"><i class="fab fa-instagram"></i></a>
+                        <a id="social-behance" href="https://www.behance.net/mahadihassan2004" target="_blank" rel="noopener" aria-label="Behance" style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;text-decoration:none;color:rgba(255,255,255,0.45);transition:all .3s;" onmouseover="this.style.background='#fff';this.style.color='#000';" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.45)';"><i class="fab fa-behance"></i></a>
+                        <a id="social-linkedin" href="https://www.linkedin.com/in/tricky-hassan-2664083a6/" target="_blank" rel="noopener" aria-label="LinkedIn" style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;text-decoration:none;color:rgba(255,255,255,0.45);transition:all .3s;" onmouseover="this.style.background='#fff';this.style.color='#000';" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.45)';"><i class="fab fa-linkedin-in"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.018);border:1px solid rgba(255,255,255,0.05);padding:clamp(22px,4vw,44px);border-radius:26px;">
+                <form action="https://formspree.io/f/xreoypwo" method="POST" style="display:flex;flex-direction:column;gap:26px;">
+                    <div class="form-row">
+                        <input type="text" name="name" required placeholder="Full Name" class="ct-input">
+                        <input type="email" name="email" required placeholder="Email Address" class="ct-input">
+                    </div>
+                    <textarea name="message" rows="4" required placeholder="Project Details..." class="ct-input" style="resize:none;display:block;"></textarea>
+                    <button type="submit"
+                        style="position:relative;overflow:hidden;padding:15px 38px;background:#fff;color:#000;font-family:'Outfit',sans-serif;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:3px;border:none;border-radius:999px;cursor:pointer;transition:transform .2s,box-shadow .3s;align-self:flex-start;"
+                        onmouseover="this.style.transform='scale(1.04)';this.style.boxShadow='0 0 28px rgba(139,92,246,0.4)';"
+                        onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none';">
+                        Send Message
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer style="padding:28px 24px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);color:rgba(255,255,255,0.18);font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:700;">
+    &copy; 2026 TRICKY DESIGN — ALL RIGHTS RESERVED.
+</footer>
+
+<script>
+/* ── DOWNLOAD FUNCTION ── */
+function downloadResume() {
+    const resumeText = `
+MAHADI HASSAN
+GFX Artist & Graphic Designer
+[DHAKA DOHAR JOYPARA 1330] | [01885903515] | [trickyartist37@gmail.com]
+Behance: https://www.behance.net/mahadihassan2004
+LinkedIn: https://www.linkedin.com/in/tricky-hassan-2664083a6/
+
+PROFESSIONAL SUMMARY
+Dynamic and detail-oriented Graphic Designer and GFX Artist with 2 years of professional experience specializing in high-impact branding and digital assets. Founder of Tricky Artist, with a proven track record of delivering aggressive, modern, and high-contrast designs for the esports and corporate sectors. Expert in Adobe Creative Suite, dedicated to pushing creative boundaries through technical precision and AI-driven workflows.
+
+CORE COMPETENCIES
+- Esports Branding: Logo design, roster/lineup posters, tournament jerseys, and broadcast overlays.
+- Advanced Image Manipulation: Expert-level photo editing, metallic texturing, and 3D effects.
+- Digital Illustration: Vector art, gradient mesh techniques, and abstract geometric fusions.
+- Tools: Adobe Photoshop (Expert), Adobe Illustrator (Expert).
+
+PROFESSIONAL EXPERIENCE
+Founder & Lead Designer | Tricky Artist (2024 – Present)
+- Established a design agency focusing on bespoke visual identities for international esports organizations.
+- Executed full-scale branding projects for clients including EnationX and FANG Esports, creating cohesive ecosystems through logos and social media assets.
+- Managed end-to-end production for high-profile tournament materials, including the Ignition Series and Paradox Weekly Tournaments.
+
+Freelance GFX Artist (2022 – 2024)
+- Collaborated with various gaming groups (e.g., Death Wish, Elite Esports) to develop aggressive, high-contrast visual content.
+- Designed professional-grade jerseys and apparel using digital mockups and clothing replacement technology.
+- Produced engaging YouTube thumbnails and milestone announcements for channels with over 20,000 subscribers.
+
+NOTABLE PROJECTS
+- EnationX Branding: Developed a "next-gen" ecosystem identity utilizing orange/black themes and complex letter fusions.
+- Death Force + (DF+): Created a minimalist yet aggressive visual identity using negative space and abstract skull motifs.
+- Pescara Bengalians Unity: Designed a specialized brand identity for a travel-sector client, showcasing versatility outside of the gaming niche.
+
+TECHNICAL SKILLS
+- Software: Adobe Photoshop, Adobe Illustrator.
+- Design Styles: 3D Metallic Vibe, Modern Geometric, Abstract Negative Space, Esports Aggressive.
+- Languages: Bangla (Native), English
+    `;
+    const blob = new Blob([resumeText.trim()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Mahadi_Hassan_CV.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/* ── ORIGINAL PORTFOLIO LOGIC ── */
+(function(){
+    const c   = document.getElementById('bg-canvas');
+    const ctx = c.getContext('2d');
+    let W, H, nodes=[], mouse={x:-9999,y:-9999}, tick=0;
+    const N = 58;
+    const DIST = 175;
+    const COLS = [[139,92,246],[249,115,22],[236,72,153],[6,182,212],[16,185,129]];
+    function resize(){ W=c.width=innerWidth; H=c.height=innerHeight; }
+    function makeNode(){
+        return {
+            x: Math.random()*W, y: Math.random()*H,
+            vx:(Math.random()-.5)*.42, vy:(Math.random()-.5)*.42,
+            r: Math.random()*2+.9,
+            col: COLS[Math.floor(Math.random()*COLS.length)],
+            phase: Math.random()*Math.PI*2,
+            ps: .018+Math.random()*.018
+        };
+    }
+    function init(){ nodes=[]; for(let i=0;i<N;i++) nodes.push(makeNode()); }
+    function draw(){
+        ctx.clearRect(0,0,W,H);
+        tick+=.006;
+        const gx=W*.5+Math.cos(tick*.7)*W*.28;
+        const gy=H*.5+Math.sin(tick*.5)*H*.28;
+        const gl1=ctx.createRadialGradient(gx,gy,0,gx,gy,W*.75);
+        gl1.addColorStop(0,`rgba(139,92,246,.07)`);
+        gl1.addColorStop(1,`rgba(0,0,0,0)`);
+        ctx.fillStyle=gl1; ctx.fillRect(0,0,W,H);
+        nodes.forEach(n=>{
+            const dx=n.x-mouse.x, dy=n.y-mouse.y;
+            const md=Math.sqrt(dx*dx+dy*dy);
+            if(md<110){ n.vx+=(dx/md)*.38; n.vy+=(dy/md)*.38; }
+            n.vx*=.992; n.vy*=.992;
+            n.x+=n.vx; n.y+=n.vy;
+            if(n.x<-20) n.x=W+20; if(n.x>W+20) n.x=-20;
+            if(n.y<-20) n.y=H+20; if(n.y>H+20) n.y=-20;
+            n.phase+=n.ps;
+        });
+        for(let i=0;i<nodes.length;i++){
+            const a=nodes[i];
+            for(let j=i+1;j<nodes.length;j++){
+                const b=nodes[j];
+                const dx=a.x-b.x, dy=a.y-b.y;
+                const d=Math.sqrt(dx*dx+dy*dy);
+                if(d<DIST){
+                    const alpha=(1-d/DIST)*.52;
+                    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+                    ctx.strokeStyle=`rgba(255,255,255,${alpha*.2})`; ctx.lineWidth=.75; ctx.stroke();
+                }
+            }
+        }
+        nodes.forEach(n=>{
+            const p=(Math.sin(n.phase)+1)/2;
+            const r=n.r+p*1.4, al=.5+p*.5;
+            ctx.fillStyle=`rgba(${n.col[0]},${n.col[1]},${n.col[2]},${al})`;
+            ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fill();
+        });
+        requestAnimationFrame(draw);
+    }
+    window.addEventListener('mousemove',e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
+    window.addEventListener('resize',()=>{ resize(); init(); });
+    resize(); init(); draw();
+})();
+
+function toggleMenu(){
+    const open=document.getElementById('mob-drawer').classList.toggle('open');
+    document.getElementById('hbg').classList.toggle('open',open);
+    document.getElementById('mob-overlay').classList.toggle('open',open);
+    document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeMenu(){
+    document.getElementById('mob-drawer').classList.remove('open');
+    document.getElementById('hbg').classList.remove('open');
+    document.getElementById('mob-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+const FALLBACK_IMAGE='profile photo/tricku.png';
+const FALLBACK_BEHANCE='https://www.behance.net/mahadihassan2004';
+const PORTFOLIO_STORAGE_KEY = 'tricky-portfolio-projects-v2';
+
+function loadProjectsFromStorage(){
+    try {
+        const stored = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
+        if(stored){
+            const parsed = JSON.parse(stored);
+            if(Array.isArray(parsed) && parsed.length) return parsed;
+        }
+    } catch(e){}
+    // Fallback to embedded JSON seed
+    try { return JSON.parse(document.getElementById('portfolio-projects-data').textContent || '[]'); }
+    catch(e){ return []; }
+}
+
+let projects = loadProjectsFromStorage();
+let CP=null, CI=0;
+
+// 🔴 LIVE SYNC: When admin panel saves changes, auto-refresh this page's project grid
+window.addEventListener('storage', function(e){
+    if(e.key === PORTFOLIO_STORAGE_KEY && e.newValue){
+        try {
+            const updated = JSON.parse(e.newValue);
+            if(Array.isArray(updated)){
+                projects = updated;
+                renderProjectGrid();
+                // Update portfolio count if visible
+                const countEl = document.getElementById('portfolio-count');
+                if(countEl) countEl.textContent = projects.length < 10 ? '0'+projects.length : projects.length;
+                // Show a subtle toast notification
+                showSyncToast();
+            }
+        } catch(e){}
+    }
+});
+
+function showSyncToast(){
+    let toast = document.getElementById('sync-toast');
+    if(!toast){
+        toast = document.createElement('div');
+        toast.id = 'sync-toast';
+        toast.style.cssText = `
+            position:fixed;bottom:28px;right:28px;z-index:99999;
+            background:rgba(6,6,8,0.92);border:1px solid rgba(34,197,94,0.35);
+            color:#22c55e;font-family:'Outfit',sans-serif;font-size:11px;font-weight:800;
+            letter-spacing:2px;text-transform:uppercase;
+            padding:12px 20px;border-radius:999px;
+            backdrop-filter:blur(14px);
+            display:flex;align-items:center;gap:9px;
+            box-shadow:0 8px 32px rgba(0,0,0,0.4);
+            transition:opacity .4s,transform .4s;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.innerHTML = '<span style="width:7px;height:7px;background:#22c55e;border-radius:50%;display:inline-block;"></span> Portfolio updated';
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(()=>{
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+    }, 3000);
+}
+
+function escapeHtml(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function handleImageFallback(n){ if(!n || n.dataset.fallbackApplied==='true') return; n.dataset.fallbackApplied='true'; n.src=FALLBACK_IMAGE; }
+function deriveProjectIcon(p){
+    const t=`${p.title} ${p.tag} ${p.category}`.toLowerCase();
+    if(t.includes('jersey')) return 'shirt';
+    if(t.includes('esport')) return 'gamepad';
+    return 'bolt';
+}
+
+function renderProjectGrid(){
+    const grid=document.getElementById('project-grid');
+    if(!grid) return;
+    grid.innerHTML=projects.map((p,i)=>`
+        <article class="pc" onclick="openProject(${i})">
+            <img src="${escapeHtml(p.images[0] || FALLBACK_IMAGE)}" alt="${escapeHtml(p.title)}" class="pc-img" onerror="handleImageFallback(this)">
+            <div class="pcbadge"><i class="fas fa-images"></i> ${p.images.length}</div>
+            <div class="pinfo">
+                <div class="ptag" style="margin-bottom:7px;"><i class="fas fa-${deriveProjectIcon(p)}"></i> ${escapeHtml(p.category)}</div>
+                <h3 class="ptitle">${escapeHtml(p.title)}</h3>
+                <p style="font-size:11px;color:rgba(255,255,255,0.38);margin-top:4px;">${escapeHtml(p.tag)}</p>
+                <button class="pvbtn">View Project <i class="fas fa-expand-alt"></i></button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function openProject(i){
+    const p=projects[i]; if(!p) return; CP=p; CI=0;
+    document.getElementById('pm-tag').textContent=CP.tag;
+    document.getElementById('pm-title').textContent=CP.title;
+    document.getElementById('pm-desc').textContent=CP.desc;
+    document.getElementById('pm-cat').textContent=CP.category;
+    document.getElementById('pm-tools').textContent=CP.tools;
+    document.getElementById('pm-year').textContent=CP.year;
+    document.getElementById('pm-client').textContent=CP.client;
+    document.getElementById('pm-behance').href=CP.behance || FALLBACK_BEHANCE;
+    renderImg(); renderThumbs();
+    document.getElementById('pm').classList.add('open');
+    document.body.style.overflow='hidden';
+}
+
+function renderImg(){
+    const imgs=CP.images.length ? CP.images : [FALLBACK_IMAGE];
+    const img=document.getElementById('pm-img');
+    img.src=imgs[CI]; img.onerror=()=>handleImageFallback(img);
+    document.getElementById('pm-counter').textContent=`${CI + 1} / ${imgs.length}`;
+}
+
+function renderThumbs(){
+    const imgs=CP.images.length ? CP.images : [FALLBACK_IMAGE];
+    document.getElementById('pm-thumbs').innerHTML=imgs.map((im,i)=>`
+        <img src="${escapeHtml(im)}" alt="Shot ${i + 1}" class="pm-thumb ${i===CI ? 'active' : ''}" onclick="CI=${i};renderImg();renderThumbs()" onerror="handleImageFallback(this)">
+    `).join('');
+}
+
+function cycleImage(d){ const t=CP.images.length; CI=(CI + d + t) % t; renderImg(); renderThumbs(); }
+function closeProject(){ document.getElementById('pm').classList.remove('open'); document.body.style.overflow=''; }
+
+/* ── COUNT-UP ANIMATION (Ultra Smooth) ── */
+function initCounters() {
+    const counters = document.querySelectorAll('.stat-number');
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if(entry.isIntersecting) {
+                const target = entry.target;
+                const endVal = parseInt(target.dataset.target);
+                
+                // Slowed down and improved easing for maximum smoothness
+                gsap.to(target, {
+                    innerHTML: endVal,
+                    duration: 4.5,          // Slower, more deliberate duration
+                    ease: "expo.out",       // Ultra-smooth deceleration
+                    snap: { innerHTML: 1 },
+                    onUpdate: function() {
+                        const val = parseInt(target.innerHTML);
+                        // Portfolio-count specific formatting (06, 07, etc.)
+                        if(target.id === 'portfolio-count') {
+                            target.innerHTML = val < 10 ? "0" + val : val;
+                        }
+                    }
+                });
+                observer.unobserve(target);
+            }
+        });
+    }, { threshold: 0.7 });
+
+    counters.forEach(c => observer.observe(c));
+}
+
+renderProjectGrid();
+initCounters();
+
+if(window.matchMedia('(pointer:fine)').matches){
+    const cur=document.getElementById('cursor'), aura=document.getElementById('cursor-aura');
+    window.addEventListener('mousemove',e=>{
+        gsap.to(cur, {x:e.clientX,y:e.clientY,duration:0});
+        gsap.to(aura,{x:e.clientX-18,y:e.clientY-18,duration:.13});
+    });
+}
+
+async function getSpotify(){
+    try{
+        const r=await fetch('https://api.lanyard.rest/v1/users/1230631754851946506');
+        const d=await r.json();
+        const w=document.getElementById('sp-widget');
+        if(d.data&&d.data.listening_to_spotify){
+            const{song,artist}=d.data.spotify;
+            document.getElementById('track-name').textContent=`${song} — ${artist}`;
+            w.classList.remove('hidden');
+        } else { w.classList.add('hidden'); }
+    } catch(e){ console.warn('Lanyard:',e); }
+}
+getSpotify(); setInterval(getSpotify,30000);
+
+/* ══════════════════════════════════════════
+   SETTINGS SYNC — reads tricky-portfolio-settings-v1
+   and applies name, tagline, years, location,
+   email, phone, behance, instagram, linkedin
+   live whenever the dashboard saves settings.
+══════════════════════════════════════════ */
+const SETTINGS_STORAGE_KEY = 'tricky-portfolio-settings-v1';
+
+function applySettings(s) {
+    if (!s) return;
+
+    // Bio tagline
+    if (s.tagline) {
+        const bio = document.getElementById('bio-text');
+        if (bio) bio.innerHTML = s.tagline;
+    }
+
+    // Years of experience counter
+    if (s.years) {
+        const yEl = document.getElementById('years-count');
+        if (yEl) {
+            yEl.setAttribute('data-target', parseInt(s.years) || 3);
+            yEl.textContent = parseInt(s.years) || 3;
+        }
+    }
+
+    // Location
+    if (s.location) {
+        const locEl = document.getElementById('location-display');
+        if (locEl) locEl.textContent = s.location;
+    }
+
+    // Contact email
+    if (s.email) {
+        const emailEl = document.getElementById('contact-email');
+        if (emailEl) { emailEl.href = 'mailto:' + s.email; emailEl.textContent = s.email; }
+    }
+
+    // Contact phone
+    if (s.phone) {
+        const phoneEl = document.getElementById('contact-phone');
+        if (phoneEl) { phoneEl.href = 'tel:' + s.phone; phoneEl.textContent = s.phone; }
+    }
+
+    // Social links
+    if (s.instagram) {
+        const igEl = document.getElementById('social-instagram');
+        if (igEl) igEl.href = s.instagram;
+    }
+    if (s.behance) {
+        const beEl = document.getElementById('social-behance');
+        if (beEl) beEl.href = s.behance;
+    }
+    if (s.linkedin) {
+        const liEl = document.getElementById('social-linkedin');
+        if (liEl) liEl.href = s.linkedin;
+    }
+}
+
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (raw) applySettings(JSON.parse(raw));
+    } catch(e) {}
+}
+
+// Apply on page load
+loadSettings();
+
+// Live-sync when dashboard saves settings in another tab
+window.addEventListener('storage', function(e) {
+    if (e.key === SETTINGS_STORAGE_KEY && e.newValue) {
+        try {
+            applySettings(JSON.parse(e.newValue));
+            showSyncToast();
+        } catch(e) {}
+    }
+});
+
+// Also keep project count stat in sync with actual project count
+(function syncProjectCount() {
+    const countEl = document.getElementById('portfolio-count');
+    if (countEl && projects.length) {
+        const n = projects.length;
+        countEl.setAttribute('data-target', n);
+        countEl.textContent = n < 10 ? '0' + n : n;
+    }
+})();
+</script>
+</body>
+</html>
