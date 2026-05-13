@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GRAPHIC. Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        red: { DEFAULT: '#FF2020', dark: '#cc1a1a' },
+        dark: { DEFAULT: '#0a0a0a', card: '#111111', border: 'rgba(255,255,255,0.06)' }
+      },
+      fontFamily: {
+        disp: ['"Black Han Sans"', 'sans-serif'],
+        mono: ['"Space Mono"', 'monospace'],
+        body: ['"DM Sans"', 'sans-serif']
+      }
+    }
+  }
+}
+</script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: #0a0a0a; color: #fff; cursor: none; font-family: 'DM Sans', sans-serif; }
+  @media (max-width: 767px) { body { cursor: auto; } }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: #FF2020; border-radius: 2px; }
+  #cursor-dot, #cursor-ring { position: fixed; pointer-events: none; border-radius: 50%; z-index: 9999; transform: translate(-50%, -50%); }
+  #cursor-dot { width: 10px; height: 10px; background: #FF2020; mix-blend-mode: difference; }
+  #cursor-ring { width: 32px; height: 32px; border: 2px solid #FF2020; opacity: .5; z-index: 9998; transition: left .08s, top .08s; }
+  @media (max-width: 767px) { #cursor-dot, #cursor-ring { display: none; } }
+  .noise { position: absolute; inset: 0; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); }
+  .grid-bg { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(255,32,32,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,32,32,.04) 1px, transparent 1px); background-size: 60px 60px; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+  .animate-fade-up { animation: fadeUp .6s ease both; }
+  .animate-slide-in { animation: slideIn .4s ease both; }
+  .btn-glow:hover { box-shadow: 0 0 20px rgba(255, 32, 32, 0.4); }
+  input:focus, textarea:focus, select:focus { outline: none; }
+</style>
+</head>
+<body>
+<div id="cursor-dot"></div>
+<div id="cursor-ring"></div>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ═══════════════════════════════════════
+// FIREBASE CONFIG
+// ═══════════════════════════════════════
+const firebaseConfig = typeof __firebase_config !== 'undefined'
+  ? JSON.parse(__firebase_config)
+  : {
+      apiKey: "AIzaSyDummy-placeholder",
+      authDomain: "your-app.firebaseapp.com",
+      projectId: "your-app",
+      storageBucket: "your-app.appspot.com",
+      messagingSenderId: "000000000000",
+      appId: "1:000000000000:web:0000000000000000"
+    };
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+
+const app = firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const PROJECTS_PATH = `artifacts/${appId}/public/data/projects`;
+
+// ═══════════════════════════════════════
+// ICONS (Lucide-style SVG components)
+// ═══════════════════════════════════════
+const Icon = ({ d, size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{typeof d === 'string' ? <path d={d} /> : d}</svg>
+);
+
+const Icons = {
+  LayoutDashboard: (p) => <Icon {...p} d={<><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>} />,
+  FolderOpen: (p) => <Icon {...p} d={<><path d="M6 14l1.45-2.9A2 2 0 019.24 10H20a2 2 0 011.94 2.5l-1.55 6a2 2 0 01-1.94 1.5H4a2 2 0 01-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 011.66.9l.82 1.2a2 2 0 001.66.9H18a2 2 0 012 2v2"/></>} />,
+  Plus: (p) => <Icon {...p} d="M12 5v14M5 12h14" />,
+  Edit: (p) => <Icon {...p} d={<><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></>} />,
+  Trash: (p) => <Icon {...p} d={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>} />,
+  LogOut: (p) => <Icon {...p} d={<><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>} />,
+  Eye: (p) => <Icon {...p} d={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>} />,
+  Lock: (p) => <Icon {...p} d={<><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>} />,
+  Mail: (p) => <Icon {...p} d={<><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></>} />,
+  AlertTriangle: (p) => <Icon {...p} d={<><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} />,
+  X: (p) => <Icon {...p} d="M18 6L6 18M6 6l12 12" />,
+  Check: (p) => <Icon {...p} d="M20 6L9 17l-5-5" />,
+  Loader: (p) => <Icon {...p} d={<><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></>} />,
+  BarChart: (p) => <Icon {...p} d={<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>} />,
+  Clock: (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />,
+  ExternalLink: (p) => <Icon {...p} d={<><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>} />,
+  Image: (p) => <Icon {...p} d={<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>} />,
+  Menu: (p) => <Icon {...p} d={<><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>} />,
+  ChevronDown: (p) => <Icon {...p} d="M6 9l6 6 6-6" />,
+  Search: (p) => <Icon {...p} d={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
+  Grid: (p) => <Icon {...p} d={<><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>} />,
+  List: (p) => <Icon {...p} d={<><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>} />,
+};
+
+// ═══════════════════════════════════════
+// UTILITY: Exponential Backoff
+// ═══════════════════════════════════════
+async function withRetry(fn, maxRetries = 3) {
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === maxRetries) throw err;
+      await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+// TOAST NOTIFICATION
+// ═══════════════════════════════════════
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  const colors = {
+    success: 'border-green-500 bg-green-500/10 text-green-400',
+    error: 'border-red bg-red/10 text-red',
+    info: 'border-blue-500 bg-blue-500/10 text-blue-400'
+  };
+
+  return (
+    <div className={`fixed top-6 right-6 z-[10000] animate-slide-in border ${colors[type] || colors.info} px-5 py-3 rounded-lg backdrop-blur-md font-mono text-xs tracking-wider uppercase flex items-center gap-3`}>
+      {type === 'success' && <Icons.Check size={16} />}
+      {type === 'error' && <Icons.AlertTriangle size={16} />}
+      {type === 'info' && <Icons.Eye size={16} />}
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 opacity-50 hover:opacity-100 transition-opacity"><Icons.X size={14} /></button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// CONFIRM MODAL
+// ═══════════════════════════════════════
+function ConfirmModal({ title, message, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="relative bg-[#111] border border-white/10 rounded-xl p-8 max-w-md w-full mx-4 animate-fade-up" onClick={e => e.stopPropagation()}>
+        <div className="noise rounded-xl" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-red/20 flex items-center justify-center text-red">
+            <Icons.AlertTriangle size={20} />
+          </div>
+          <h3 className="font-disp text-xl uppercase tracking-wide">{title}</h3>
+        </div>
+        <p className="font-body text-sm text-gray-400 mb-8 leading-relaxed">{message}</p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onCancel} className="font-mono text-xs tracking-[.15em] uppercase px-5 py-2.5 border border-white/10 text-gray-400 hover:border-white/30 hover:text-white transition-all rounded-lg">Cancel</button>
+          <button onClick={onConfirm} className="font-mono text-xs tracking-[.15em] uppercase px-5 py-2.5 bg-red text-white border border-red hover:bg-transparent hover:text-red transition-all rounded-lg btn-glow">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// LOADING SPINNER
+// ═══════════════════════════════════════
+function Spinner({ size = 'md' }) {
+  const s = size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-10 h-10' : 'w-6 h-6';
+  return <div className={`${s} border-2 border-red/30 border-t-red rounded-full`} style={{ animation: 'spin .8s linear infinite' }} />;
+}
+
+// ═══════════════════════════════════════
+// LOGIN SCREEN
+// ═══════════════════════════════════════
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await withRetry(() => auth.signInWithEmailAndPassword(email, password));
+    } catch (err) {
+      setError(err.message.replace('Firebase: ', '').replace(/\(auth\/.*\)\.?/, '').trim() || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
+      <div className="noise" />
+      <div className="grid-bg" />
+      <div className="absolute w-[600px] h-[600px] rounded-full top-1/4 left-1/2 -translate-x-1/2 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(255,32,32,.18) 0%, transparent 70%)' }} />
+
+      <div className="relative z-10 w-full max-w-md animate-fade-up">
+        <div className="text-center mb-10">
+          <h1 className="font-disp text-4xl md:text-5xl tracking-wide uppercase">
+            GRAPHIC<span className="text-red">.</span>
+          </h1>
+          <p className="font-mono text-xs text-gray-500 tracking-[.25em] uppercase mt-3">Admin Dashboard</p>
+        </div>
+
+        <div className="bg-[#111] border border-white/[.06] rounded-2xl p-8 relative overflow-hidden">
+          <div className="noise rounded-2xl" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-9 h-9 rounded-lg bg-red/20 flex items-center justify-center text-red"><Icons.Lock size={18} /></div>
+              <div>
+                <h2 className="font-disp text-lg uppercase tracking-wide">Sign In</h2>
+                <p className="font-mono text-[.6rem] text-gray-500 tracking-[.2em] uppercase">Portfolio Admin Access</p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-5 px-4 py-3 bg-red/10 border border-red/30 rounded-lg text-red text-xs font-mono tracking-wider flex items-center gap-2">
+                <Icons.AlertTriangle size={14} />{error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="font-mono text-[.6rem] text-gray-500 tracking-[.2em] uppercase block mb-2">Email</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"><Icons.Mail size={16} /></div>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                    className="w-full bg-[#0a0a0a] border border-white/[.06] rounded-lg px-10 py-3 font-body text-sm text-white placeholder-gray-600 focus:border-red/50 transition-colors"
+                    placeholder="admin@graphic.studio" />
+                </div>
+              </div>
+              <div>
+                <label className="font-mono text-[.6rem] text-gray-500 tracking-[.2em] uppercase block mb-2">Password</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"><Icons.Lock size={16} /></div>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                    className="w-full bg-[#0a0a0a] border border-white/[.06] rounded-lg px-10 py-3 font-body text-sm text-white placeholder-gray-600 focus:border-red/50 transition-colors"
+                    placeholder="••••••••" />
+                </div>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full font-mono text-xs tracking-[.15em] uppercase py-3.5 bg-red text-white rounded-lg hover:bg-red-dark transition-all btn-glow disabled:opacity-50 flex items-center justify-center gap-2">
+                {loading ? <><Spinner size="sm" /> Authenticating...</> : <>Sign In <span className="text-base">↗</span></>}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <p className="text-center font-mono text-[.55rem] text-gray-600 tracking-[.2em] uppercase mt-6">© 2026 GRAPHIC. All Rights Reserved</p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// EMPTY PROJECT TEMPLATE
+// ═══════════════════════════════════════
+const emptyProject = {
+  title: '',
+  category: '',
+  description: '',
+  software: '',
+  behanceUrl: '',
+  mainImageUrl: '',
+  feedImages: [''],
+  createdAt: null,
+  updatedAt: null
+};
+
+// ═══════════════════════════════════════
+// PROJECT FORM
+// ═══════════════════════════════════════
+function ProjectForm({ project, onSave, onCancel, saving }) {
+  const [form, setForm] = useState({ ...emptyProject, ...project });
+
+  useEffect(() => {
+    setForm({ ...emptyProject, ...project });
+  }, [project]);
+
+  const updateField = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+  const updateFeedImage = (index, value) => {
+    const imgs = [...form.feedImages];
+    imgs[index] = value;
+    setForm(prev => ({ ...prev, feedImages: imgs }));
+  };
+
+  const addFeedImage = () => setForm(prev => ({ ...prev, feedImages: [...prev.feedImages, ''] }));
+
+  const removeFeedImage = (index) => {
+    if (form.feedImages.length <= 1) return;
+    setForm(prev => ({ ...prev, feedImages: prev.feedImages.filter((_, i) => i !== index) }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({
+      ...form,
+      feedImages: form.feedImages.filter(u => u.trim()),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...(!project?.id && { createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+    });
+  };
+
+  const inputCls = "w-full bg-[#0a0a0a] border border-white/[.06] rounded-lg px-4 py-3 font-body text-sm text-white placeholder-gray-600 focus:border-red/50 transition-colors";
+  const labelCls = "font-mono text-[.6rem] text-gray-500 tracking-[.2em] uppercase block mb-2";
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className={labelCls}>Project Title *</label>
+          <input type="text" value={form.title} onChange={e => updateField('title', e.target.value)} required className={inputCls} placeholder="e.g. VNS Esports — Player Cards" />
+        </div>
+        <div>
+          <label className={labelCls}>Category *</label>
+          <input type="text" value={form.category} onChange={e => updateField('category', e.target.value)} required className={inputCls} placeholder="e.g. Esports Design" />
+        </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Description *</label>
+        <textarea value={form.description} onChange={e => updateField('description', e.target.value)} required rows={3} className={inputCls + " resize-none"} placeholder="Brief project description..." />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className={labelCls}>Software Used</label>
+          <input type="text" value={form.software} onChange={e => updateField('software', e.target.value)} className={inputCls} placeholder="e.g. Photoshop, Illustrator" />
+        </div>
+        <div>
+          <label className={labelCls}>Behance URL</label>
+          <input type="url" value={form.behanceUrl} onChange={e => updateField('behanceUrl', e.target.value)} className={inputCls} placeholder="https://behance.net/..." />
+        </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Main Image URL *</label>
+        <input type="url" value={form.mainImageUrl} onChange={e => updateField('mainImageUrl', e.target.value)} required className={inputCls} placeholder="https://..." />
+      </div>
+
+      <div>
+        <label className={labelCls}>Feed Image URLs</label>
+        <div className="space-y-2">
+          {form.feedImages.map((url, i) => (
+            <div key={i} className="flex gap-2">
+              <input type="url" value={url} onChange={e => updateFeedImage(i, e.target.value)} className={inputCls} placeholder={`Feed image ${i + 1} URL`} />
+              {form.feedImages.length > 1 && (
+                <button type="button" onClick={() => removeFeedImage(i)} className="px-3 text-gray-600 hover:text-red transition-colors shrink-0"><Icons.X size={16} /></button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={addFeedImage} className="font-mono text-[.6rem] tracking-[.15em] uppercase text-red/70 hover:text-red transition-colors flex items-center gap-1.5 mt-1">
+            <Icons.Plus size={14} /> Add Image
+          </button>
+        </div>
+      </div>
+
+      {/* Live Preview Card */}
+      <div>
+        <label className={labelCls}>Live Preview</label>
+        <div className="bg-[#0a0a0a] border border-white/[.06] rounded-xl overflow-hidden">
+          <div className="aspect-video relative bg-[#111] overflow-hidden">
+            {form.mainImageUrl ? (
+              <img src={form.mainImageUrl} alt="Preview" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-700">
+                <Icons.Image size={48} />
+              </div>
+            )}
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,.08) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.55) 65%, rgba(0,0,0,.88) 100%)' }} />
+            {form.category && (
+              <div className="absolute top-3 left-3 z-10">
+                <span className="font-mono text-[.5rem] tracking-[.18em] text-white bg-black/65 border border-white/15 px-2 py-0.5 uppercase backdrop-blur-sm">{form.category}</span>
+              </div>
+            )}
+            <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+              {form.category && <span className="font-mono text-[.5rem] tracking-[.2em] text-red uppercase block mb-1">{form.category}</span>}
+              <div className="font-disp text-sm md:text-base text-white uppercase leading-tight">{form.title || 'Project Title'}</div>
+              {form.description && <div className="font-body text-[.6rem] text-white/50 mt-1 line-clamp-2">{form.description}</div>}
+            </div>
+          </div>
+          {form.feedImages.filter(u => u.trim()).length > 0 && (
+            <div className="p-3 border-t border-white/[.04]">
+              <div className="font-mono text-[.5rem] text-gray-600 tracking-[.15em] uppercase mb-2">{form.feedImages.filter(u => u.trim()).length} Feed Images</div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {form.feedImages.filter(u => u.trim()).map((url, i) => (
+                  <div key={i} className="w-12 h-12 rounded bg-[#111] border border-white/[.04] overflow-hidden shrink-0">
+                    <img src={url} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-3 justify-end pt-2">
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="font-mono text-xs tracking-[.15em] uppercase px-5 py-2.5 border border-white/10 text-gray-400 hover:border-white/30 hover:text-white transition-all rounded-lg">Cancel</button>
+        )}
+        <button type="submit" disabled={saving}
+          className="font-mono text-xs tracking-[.15em] uppercase px-6 py-2.5 bg-red text-white border border-red hover:bg-transparent hover:text-red transition-all rounded-lg btn-glow disabled:opacity-50 flex items-center gap-2">
+          {saving ? <><Spinner size="sm" /> Saving...</> : <><Icons.Check size={14} /> {project?.id ? 'Update Project' : 'Add Project'}</>}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ═══════════════════════════════════════
+// STAT CARD
+// ═══════════════════════════════════════
+function StatCard({ icon: IconComp, label, value, sub }) {
+  return (
+    <div className="bg-[#111] border border-white/[.06] rounded-2xl p-5 relative overflow-hidden group hover:border-red/30 transition-all">
+      <div className="noise rounded-2xl" />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="w-10 h-10 rounded-xl bg-red/10 flex items-center justify-center text-red group-hover:bg-red/20 transition-colors">
+            <IconComp size={18} />
+          </div>
+          <span className="font-mono text-[.55rem] text-gray-600 tracking-[.15em] uppercase">{sub}</span>
+        </div>
+        <div className="font-disp text-3xl text-white mb-1">{value}</div>
+        <div className="font-mono text-[.6rem] text-gray-500 tracking-[.15em] uppercase">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// MAIN DASHBOARD
+// ═══════════════════════════════════════
+function Dashboard({ user }) {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('grid');
+  const [showForm, setShowForm] = useState(false);
+  const [editProject, setEditProject] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('dashboard');
+
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type, key: Date.now() });
+  }, []);
+
+  // Fetch projects from Firestore
+  useEffect(() => {
+    const unsub = db.collection(PROJECTS_PATH).orderBy('createdAt', 'desc').onSnapshot(
+      snap => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setProjects(docs);
+        setLoading(false);
+      },
+      err => {
+        console.error('Firestore error:', err);
+        showToast('Failed to load projects', 'error');
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [showToast]);
+
+  const handleSave = async (data) => {
+    setSaving(true);
+    try {
+      if (editProject?.id) {
+        await withRetry(() => db.collection(PROJECTS_PATH).doc(editProject.id).update(data));
+        showToast('Project updated successfully', 'success');
+      } else {
+        await withRetry(() => db.collection(PROJECTS_PATH).add(data));
+        showToast('Project added successfully', 'success');
+      }
+      setShowForm(false);
+      setEditProject(null);
+      setActiveSection('projects');
+    } catch (err) {
+      showToast(err.message || 'Save failed', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await withRetry(() => db.collection(PROJECTS_PATH).doc(deleteTarget.id).delete());
+      showToast('Project deleted', 'success');
+    } catch (err) {
+      showToast('Delete failed', 'error');
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleEdit = (proj) => {
+    setEditProject(proj);
+    setShowForm(true);
+    setActiveSection('form');
+  };
+
+  const handleAdd = () => {
+    setEditProject(null);
+    setShowForm(true);
+    setActiveSection('form');
+  };
+
+  const categories = useMemo(() => {
+    const cats = new Set(projects.map(p => p.category).filter(Boolean));
+    return ['All', ...Array.from(cats)];
+  }, [projects]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p => {
+      const matchSearch = !searchQuery || p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCategory = filterCategory === 'All' || p.category === filterCategory;
+      return matchSearch && matchCategory;
+    });
+  }, [projects, searchQuery, filterCategory]);
+
+  const recentCount = useMemo(() => {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return projects.filter(p => p.updatedAt?.toDate?.() > weekAgo || p.createdAt?.toDate?.() > weekAgo).length;
+  }, [projects]);
+
+  const handleLogout = () => auth.signOut();
+
+  // Sidebar nav items
+  const navItems = [
+    { id: 'dashboard', icon: Icons.LayoutDashboard, label: 'Dashboard' },
+    { id: 'projects', icon: Icons.FolderOpen, label: 'Projects' },
+    { id: 'form', icon: Icons.Plus, label: 'Add Project', action: handleAdd },
+  ];
+
+  return (
+    <div className="min-h-screen flex relative">
+      <div className="noise" />
+      <div className="grid-bg" />
+
+      {/* Mobile overlay */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Sidebar */}
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-[#0d0d0d] border-r border-white/[.06] z-40 flex flex-col transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-white/[.06]">
+          <h1 className="font-disp text-xl tracking-wide uppercase">GRAPHIC<span className="text-red">.</span></h1>
+          <p className="font-mono text-[.5rem] text-gray-600 tracking-[.2em] uppercase mt-1">Admin Panel</p>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map(item => (
+            <button key={item.id} onClick={() => { if (item.action) item.action(); else setActiveSection(item.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-mono text-xs tracking-[.12em] uppercase transition-all
+                ${activeSection === item.id ? 'bg-red/10 text-red border border-red/20' : 'text-gray-500 hover:text-white hover:bg-white/[.03] border border-transparent'}`}>
+              <item.icon size={16} />{item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-white/[.06]">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <div className="w-8 h-8 rounded-full bg-red/20 flex items-center justify-center font-disp text-xs text-red">{user.email?.[0]?.toUpperCase()}</div>
+            <div className="overflow-hidden">
+              <div className="font-mono text-[.55rem] text-gray-400 tracking-wider truncate">{user.email}</div>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-mono text-xs tracking-[.12em] uppercase text-gray-600 hover:text-red hover:bg-red/5 transition-all border border-transparent hover:border-red/20">
+            <Icons.LogOut size={16} /> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 min-h-screen relative z-10">
+        {/* Top bar */}
+        <header className="sticky top-0 z-20 bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/[.06] px-4 md:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white transition-colors"><Icons.Menu size={20} /></button>
+            <h2 className="font-disp text-lg uppercase tracking-wide">
+              {activeSection === 'dashboard' && 'Dashboard'}
+              {activeSection === 'projects' && 'Projects'}
+              {activeSection === 'form' && (editProject ? 'Edit Project' : 'New Project')}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            {activeSection === 'projects' && (
+              <>
+                <div className="relative hidden sm:block">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"><Icons.Search size={14} /></div>
+                  <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search..."
+                    className="bg-[#111] border border-white/[.06] rounded-lg pl-9 pr-4 py-2 font-body text-xs text-white placeholder-gray-600 focus:border-red/50 transition-colors w-48" />
+                </div>
+                <div className="flex border border-white/[.06] rounded-lg overflow-hidden">
+                  <button onClick={() => setView('grid')} className={`p-2 transition-colors ${view === 'grid' ? 'bg-red/20 text-red' : 'text-gray-600 hover:text-white'}`}><Icons.Grid size={14} /></button>
+                  <button onClick={() => setView('list')} className={`p-2 transition-colors ${view === 'list' ? 'bg-red/20 text-red' : 'text-gray-600 hover:text-white'}`}><Icons.List size={14} /></button>
+                </div>
+              </>
+            )}
+            <button onClick={handleAdd} className="font-mono text-[.6rem] tracking-[.15em] uppercase px-4 py-2 bg-red text-white rounded-lg hover:bg-red-dark transition-all btn-glow flex items-center gap-1.5">
+              <Icons.Plus size={14} /> <span className="hidden sm:inline">Add</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="p-4 md:p-8">
+          {/* Dashboard view */}
+          {activeSection === 'dashboard' && (
+            <div className="animate-fade-up space-y-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <StatCard icon={Icons.FolderOpen} label="Total Projects" value={projects.length} sub="All Time" />
+                <StatCard icon={Icons.Clock} label="Recent Updates" value={recentCount} sub="This Week" />
+                <StatCard icon={Icons.BarChart} label="Categories" value={categories.length - 1} sub="Active" />
+              </div>
+
+              <div>
+                <h3 className="font-disp text-lg uppercase tracking-wide mb-4">Recent Projects</h3>
+                {loading ? (
+                  <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center py-16 bg-[#111] border border-white/[.06] rounded-2xl">
+                    <Icons.FolderOpen size={48} className="mx-auto mb-4 text-gray-700" />
+                    <p className="font-mono text-xs text-gray-600 tracking-wider uppercase mb-4">No projects yet</p>
+                    <button onClick={handleAdd} className="font-mono text-xs tracking-[.15em] uppercase px-5 py-2.5 bg-red text-white rounded-lg btn-glow">
+                      Add Your First Project
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {projects.slice(0, 6).map(proj => (
+                      <ProjectCard key={proj.id} project={proj} onEdit={() => handleEdit(proj)} onDelete={() => setDeleteTarget(proj)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Projects view */}
+          {activeSection === 'projects' && (
+            <div className="animate-fade-up">
+              {/* Mobile search */}
+              <div className="sm:hidden mb-4">
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"><Icons.Search size={14} /></div>
+                  <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search projects..."
+                    className="w-full bg-[#111] border border-white/[.06] rounded-lg pl-9 pr-4 py-2.5 font-body text-xs text-white placeholder-gray-600 focus:border-red/50 transition-colors" />
+                </div>
+              </div>
+
+              {/* Category filter */}
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
+                {categories.map(cat => (
+                  <button key={cat} onClick={() => setFilterCategory(cat)}
+                    className={`font-mono text-[.55rem] tracking-[.15em] uppercase px-3.5 py-1.5 rounded-full whitespace-nowrap transition-all border
+                      ${filterCategory === cat ? 'bg-red/20 text-red border-red/30' : 'text-gray-500 border-white/[.06] hover:border-white/20 hover:text-white'}`}>
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {loading ? (
+                <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+              ) : filteredProjects.length === 0 ? (
+                <div className="text-center py-16 bg-[#111] border border-white/[.06] rounded-2xl">
+                  <Icons.Search size={48} className="mx-auto mb-4 text-gray-700" />
+                  <p className="font-mono text-xs text-gray-600 tracking-wider uppercase">No projects found</p>
+                </div>
+              ) : view === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredProjects.map(proj => (
+                    <ProjectCard key={proj.id} project={proj} onEdit={() => handleEdit(proj)} onDelete={() => setDeleteTarget(proj)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredProjects.map(proj => (
+                    <ProjectListItem key={proj.id} project={proj} onEdit={() => handleEdit(proj)} onDelete={() => setDeleteTarget(proj)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Form view */}
+          {activeSection === 'form' && (
+            <div className="max-w-3xl mx-auto animate-fade-up">
+              <div className="bg-[#111] border border-white/[.06] rounded-2xl p-6 md:p-8 relative overflow-hidden">
+                <div className="noise rounded-2xl" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="w-10 h-10 rounded-xl bg-red/10 flex items-center justify-center text-red">
+                      {editProject ? <Icons.Edit size={18} /> : <Icons.Plus size={18} />}
+                    </div>
+                    <div>
+                      <h3 className="font-disp text-lg uppercase tracking-wide">{editProject ? 'Edit Project' : 'New Project'}</h3>
+                      <p className="font-mono text-[.55rem] text-gray-500 tracking-[.2em] uppercase">
+                        {editProject ? 'Update project details' : 'Add to your portfolio'}
+                      </p>
+                    </div>
+                  </div>
+                  <ProjectForm project={editProject} onSave={handleSave} saving={saving}
+                    onCancel={() => { setShowForm(false); setEditProject(null); setActiveSection('projects'); }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Delete Confirm Modal */}
+      {deleteTarget && (
+        <ConfirmModal title="Delete Project" message={`Are you sure you want to delete "${deleteTarget.title}"? This action cannot be undone.`}
+          onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+      )}
+
+      {/* Toast */}
+      {toast && <Toast key={toast.key} message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// PROJECT CARD (Grid View)
+// ═══════════════════════════════════════
+function ProjectCard({ project, onEdit, onDelete }) {
+  const dateStr = project.updatedAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    || project.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    || '—';
+
+  return (
+    <div className="bg-[#111] border border-white/[.06] rounded-2xl overflow-hidden group hover:border-red/30 transition-all hover:shadow-[0_8px_32px_rgba(255,32,32,.08)]">
+      <div className="aspect-video relative overflow-hidden bg-[#0a0a0a]">
+        {project.mainImageUrl ? (
+          <img src={project.mainImageUrl} alt={project.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={e => { e.target.style.display = 'none'; }} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-800"><Icons.Image size={40} /></div>
+        )}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,.05) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,.7) 100%)' }} />
+        {project.category && (
+          <div className="absolute top-3 left-3 z-10">
+            <span className="font-mono text-[.5rem] tracking-[.18em] text-white bg-black/65 border border-white/15 px-2 py-0.5 uppercase backdrop-blur-sm rounded-sm">{project.category}</span>
+          </div>
+        )}
+        <div className="absolute top-3 right-3 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={onEdit} className="w-8 h-8 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:text-red hover:border-red/50 transition-all"><Icons.Edit size={13} /></button>
+          <button onClick={onDelete} className="w-8 h-8 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:text-red hover:border-red/50 transition-all"><Icons.Trash size={13} /></button>
+        </div>
+      </div>
+      <div className="p-4">
+        <h4 className="font-disp text-sm uppercase tracking-wide mb-1.5 line-clamp-1">{project.title || 'Untitled'}</h4>
+        <p className="font-body text-xs text-gray-500 line-clamp-2 mb-3">{project.description}</p>
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[.5rem] text-gray-600 tracking-[.15em] uppercase">{dateStr}</span>
+          <div className="flex items-center gap-2">
+            {project.behanceUrl && (
+              <a href={project.behanceUrl} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-red transition-colors"><Icons.ExternalLink size={13} /></a>
+            )}
+            {project.feedImages?.length > 0 && (
+              <span className="font-mono text-[.5rem] text-gray-600 tracking-wider">{project.feedImages.length} <span className="hidden sm:inline">imgs</span></span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// PROJECT LIST ITEM (Table View)
+// ═══════════════════════════════════════
+function ProjectListItem({ project, onEdit, onDelete }) {
+  const dateStr = project.updatedAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    || project.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    || '—';
+
+  return (
+    <div className="bg-[#111] border border-white/[.06] rounded-xl p-4 flex items-center gap-4 group hover:border-red/30 transition-all">
+      <div className="w-16 h-12 rounded-lg overflow-hidden bg-[#0a0a0a] shrink-0">
+        {project.mainImageUrl ? (
+          <img src={project.mainImageUrl} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none'; }} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-800"><Icons.Image size={16} /></div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-disp text-sm uppercase tracking-wide truncate">{project.title || 'Untitled'}</h4>
+        <div className="flex items-center gap-3 mt-0.5">
+          {project.category && <span className="font-mono text-[.5rem] text-red tracking-[.15em] uppercase">{project.category}</span>}
+          <span className="font-mono text-[.5rem] text-gray-600 tracking-[.12em]">{dateStr}</span>
+        </div>
+      </div>
+      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button onClick={onEdit} className="w-8 h-8 rounded-lg border border-white/10 flex items-center justify-center text-gray-400 hover:text-red hover:border-red/50 transition-all"><Icons.Edit size={13} /></button>
+        <button onClick={onDelete} className="w-8 h-8 rounded-lg border border-white/10 flex items-center justify-center text-gray-400 hover:text-red hover:border-red/50 transition-all"><Icons.Trash size={13} /></button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════
+// APP ROOT
+// ═══════════════════════════════════════
+function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    // Try custom token auth first, then anonymous fallback
+    async function initAuth() {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        try {
+          await auth.signInWithCustomToken(__initial_auth_token);
+        } catch (e) {
+          console.warn('Custom token auth failed, waiting for manual login');
+        }
+      }
+    }
+    initAuth();
+
+    const unsub = auth.onAuthStateChanged(u => {
+      setUser(u);
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative">
+        <div className="noise" />
+        <div className="grid-bg" />
+        <div className="text-center animate-fade-up relative z-10">
+          <h1 className="font-disp text-3xl tracking-wide uppercase mb-4">GRAPHIC<span className="text-red">.</span></h1>
+          <Spinner size="lg" />
+          <p className="font-mono text-[.55rem] text-gray-600 tracking-[.2em] uppercase mt-4">Loading Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return user ? <Dashboard user={user} /> : <LoginScreen />;
+}
+
+// ═══════════════════════════════════════
+// MOUNT + CURSOR
+// ═══════════════════════════════════════
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+// Custom cursor
+const dot = document.getElementById('cursor-dot');
+const ring = document.getElementById('cursor-ring');
+window.addEventListener('mousemove', (e) => {
+  dot.style.left = e.clientX + 'px';
+  dot.style.top = e.clientY + 'px';
+  setTimeout(() => {
+    ring.style.left = e.clientX + 'px';
+    ring.style.top = e.clientY + 'px';
+  }, 80);
+});
+</script>
+</body>
+</html>
